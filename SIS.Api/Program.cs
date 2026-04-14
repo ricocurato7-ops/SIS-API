@@ -1,38 +1,44 @@
-using SIS.Api.Services;
-
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Services ────────────────────────────────────────────────────────────────
+// Add services to the container
 builder.Services.AddControllers();
-builder.Services.AddSingleton<JsonDatabase>();   // singleton so file locks don't clash
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-// Allow the HTML frontend (opened from file:// or a local dev server) to call the API
+// ===== CORS FIX =====
+// Allow requests from your Netlify frontend
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy
-            .AllowAnyOrigin()   // tighten to your origin in production
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        policy.WithOrigins(
+                "https://your-netlify-app.netlify.app",  // ⚠️ REPLACE with your actual Netlify URL
+                "https://*.netlify.app",                  // Allow all Netlify apps (for testing)
+                "http://localhost:5500",                  // VS Code Live Server
+                "http://localhost:5000",                  // Local frontend
+                "http://127.0.0.1:5500"                   // Alternative local
+            )
+            .AllowAnyMethod()      // GET, POST, PUT, DELETE
+            .AllowAnyHeader()      // Content-Type, Authorization, etc.
+            .AllowCredentials();    // Allow cookies/tokens
     });
 });
 
-builder.Services.AddEndpointsApiExplorer();
-
-// ── App pipeline ────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// ===== CORS ORDER MATTERS! =====
+// Use CORS before other middleware
 app.UseCors("AllowFrontend");
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
-
-// Default route → friendly message so you know the API is alive
-app.MapGet("/", () => Results.Ok(new
-{
-    status  = "running",
-    message = "SIS API is online. Use /api/students and /api/auth/login.",
-    time    = DateTime.UtcNow
-}));
 
 app.Run();
